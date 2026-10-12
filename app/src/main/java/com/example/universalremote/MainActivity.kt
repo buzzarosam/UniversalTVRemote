@@ -1,6 +1,7 @@
 
 package com.example.universalremote
 
+import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,6 +51,11 @@ private fun RemoteScreen() {
     var selectedTv by remember { mutableStateOf("Select your TV") }
     var message by remember { mutableStateOf("Ready to connect") }
     var muted by remember { mutableStateOf(false) }
+    var showTvSetup by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val capabilities = remember(context) {
+    DeviceCapabilityDetector.detect(context)
+    }
 
     val gradient = Brush.verticalGradient(
         colors = listOf(Color(0xFF151B26), Background, Background)
@@ -104,7 +110,7 @@ private fun RemoteScreen() {
                     .background(Panel)
                     .border(1.dp, Color(0xFF303847), RoundedCornerShape(20.dp))
                     .clickable {
-                        message = "TV setup will be added next"
+                        showTvSetup = true
                     }
                     .padding(17.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -141,12 +147,43 @@ private fun RemoteScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            Text(
-                text = message,
-                color = Muted,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
-            )
+
+Column(
+    horizontalAlignment = Alignment.CenterHorizontally
+) {
+    Text(
+        text = message,
+        color = Muted,
+        fontSize = 12.sp,
+        textAlign = TextAlign.Center
+    )
+
+    Spacer(Modifier.height(10.dp))
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CapabilityChip(
+            label = if (capabilities.hasIrEmitter) {
+                "IR available"
+            } else {
+                "No IR detected"
+            },
+            available = capabilities.hasIrEmitter
+        )
+
+        CapabilityChip(
+            label = if (capabilities.hasWifiFeature) {
+                "Wi-Fi available"
+            } else {
+                "No Wi-Fi"
+            },
+            available = capabilities.hasWifiFeature
+        )
+    }
+}
+
 
             Spacer(Modifier.height(25.dp))
 
@@ -282,6 +319,17 @@ private fun RemoteScreen() {
 
             Spacer(Modifier.height(12.dp))
         }
+    }
+
+    if (showTvSetup) {
+        TvSetupDialog(
+            onDismiss = { showTvSetup = false },
+            onSelectTv = { brand, method ->
+                selectedTv = "$brand ($method)"
+                message = "$brand selected — setup not connected yet"
+                showTvSetup = false
+            }
+        )
     }
 }
 
@@ -470,4 +518,144 @@ private fun Shortcut(
             maxLines = 1
         )
     }
+}
+
+@Composable
+private fun CapabilityChip(
+    label: String,
+    available: Boolean
+) {
+    val tint = if (available) {
+        Color(0xFF77D6A3)
+    } else {
+        Muted
+    }
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Panel)
+            .border(
+                1.dp,
+                if (available) Color(0xFF285641) else Color(0xFF303847),
+                RoundedCornerShape(50)
+            )
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(tint)
+        )
+
+        Text(
+            text = label,
+            color = tint,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+
+@Composable
+private fun TvSetupDialog(
+    onDismiss: () -> Unit,
+    onSelectTv: (String, String) -> Unit
+) {
+    var brand by remember { mutableStateOf("Samsung") }
+    var method by remember { mutableStateOf("IR") }
+    var brandMenuExpanded by remember { mutableStateOf(false) }
+
+    val brands = listOf(
+        "Samsung", "LG", "Sony", "Xiaomi",
+        "TCL", "Hisense", "OnePlus", "Other"
+    )
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Panel,
+        title = {
+            Text("Set up your TV", color = White)
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("TV brand", color = Muted)
+
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(PanelLight)
+                            .clickable { brandMenuExpanded = true }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = brand,
+                            color = White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text("▾", color = Muted)
+                    }
+
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = brandMenuExpanded,
+                        onDismissRequest = { brandMenuExpanded = false }
+                    ) {
+                        brands.forEach { option ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    brand = option
+                                    brandMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Text("Connection method", color = Muted)
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("IR", "Wi-Fi").forEach { option ->
+                        Text(
+                            text = option,
+                            color = if (method == option) White else Muted,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (method == option) Blue else PanelLight
+                                )
+                                .clickable { method = option }
+                                .padding(
+                                    horizontal = 18.dp,
+                                    vertical = 10.dp
+                                )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { onSelectTv(brand, method) }
+            ) {
+                Text("Continue", color = Blue)
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Muted)
+            }
+        }
+    )
 }
